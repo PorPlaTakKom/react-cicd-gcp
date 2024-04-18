@@ -1,14 +1,17 @@
 import React, { useState, useEffect } from 'react';
 import { db } from './firebase.js';
-import { collection, getDocs, onSnapshot } from "firebase/firestore";
+import { collection, getDocs, onSnapshot, addDoc } from "firebase/firestore";
+import Card from './components/Card';
+import Button from './components/Button';
+import Modal from './components/Modal';
 
 function App() {
   const [words, setWords] = useState([]);
   const [activeIndex, setActiveIndex] = useState(0);
+  const [isModalOpen, setIsModalOpen] = useState(false);
 
   useEffect(() => {
     const wordsCollectionRef = collection(db, "words");
-    
     const fetchData = async () => {
       try {
         const data = await getDocs(wordsCollectionRef);
@@ -20,7 +23,6 @@ function App() {
         console.error("Error fetching data:", error);
       }
     };
-
     console.log("Component mounted.");
     const localWords = JSON.parse(localStorage.getItem('words'));
     if (localWords && localWords.length > 0) {
@@ -28,14 +30,12 @@ function App() {
     } else {
       fetchData();
     }
-
     const unsubscribe = onSnapshot(wordsCollectionRef, (snapshot) => {
       const updatedWords = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
       setWords(updatedWords);
       localStorage.setItem('words', JSON.stringify(updatedWords));
       console.log("Real-time update received:", updatedWords);
     });
-
     return () => {
       unsubscribe();
       console.log("Listener unsubscribed.");
@@ -50,16 +50,21 @@ function App() {
     setActiveIndex(prevIndex => (prevIndex === words.length - 1 ? 0 : prevIndex + 1));
   };
 
+  const handleAddWord = async (newWord) => {
+    try {
+      const docRef = await addDoc(collection(db, "words"), newWord);
+      console.log("New word added with ID: ", docRef.id);
+      setWords(prevWords => [...prevWords, newWord]);
+    } catch (error) {
+      console.error("Error adding word: ", error);
+    }
+  };
+
   return (
-    <div className="flex justify-center items-center h-screen">
+    <div className="flex flex-col justify-center items-center h-screen">
       <div className="relative w-full md:w-2/3 lg:w-1/2 xl:w-1/3 h-72 overflow-hidden flex flex-col justify-center items-center">
         {activeIndex > 0 && (
-          <button
-            className="absolute left-0 z-10 top-1/2 transform -translate-y-1/2 flex justify-center items-center w-10 h-10 bg-gray-200 text-gray-600 hover:text-gray-900 ml-3"
-            onClick={handlePrev}
-          >
-            &lt;
-          </button>
+          <Button onClick={handlePrev} direction="left" />
         )}
         {words.map((word, index) => (
           <div
@@ -68,28 +73,22 @@ function App() {
               index === activeIndex ? 'opacity-100' : 'opacity-0'
             }`}
             style={{
-              width: '80%', // Adjust width to fill available space
-              height: '90%', // Adjust height to be greater than width
-              maxWidth: '300px', // Max width for responsiveness
-              maxHeight: '400px', // Max height for responsiveness
+              width: '80%',
+              height: '90%',
+              maxWidth: '300px',
+              maxHeight: '400px',
               transform: `translateX(${(index - activeIndex) * 100}%)`,
             }}
           >
-            <div className="bg-white p-4 shadow-md rounded-lg h-full flex flex-col justify-center items-center">
-              <h2 className="text-xl font-semibold text-center">{word.en}</h2>
-              <p className="text-gray-500 text-center">{word.th}</p>
-            </div>
+            <Card word={word} />
           </div>
         ))}
         {activeIndex < words.length - 1 && (
-          <button
-            className="absolute right-0 z-10 top-1/2 transform -translate-y-1/2 flex justify-center items-center w-10 h-10 bg-gray-200 text-gray-600 hover:text-gray-900 mr-3"
-            onClick={handleNext}
-          >
-            &gt;
-          </button>
+          <Button onClick={handleNext} direction="right" />
         )}
       </div>
+      <button className="mt-4 bg-blue-500 text-white px-4 py-2 rounded" onClick={() => setIsModalOpen(true)}>Add New Word</button>
+      <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} onAddWord={handleAddWord} />
     </div>
   );
 }
